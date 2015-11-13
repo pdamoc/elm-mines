@@ -1,75 +1,30 @@
 import Graphics.Collage exposing (..)
 import Graphics.Element exposing (..)
 import Color exposing (..) 
-import Array exposing (Array, fromList)
 import Set
 import Random exposing (initialSeed, int, generate, pair)
 import Mouse 
 import Keyboard
 import Text
+import Matrix exposing (Matrix, set, get, repeat, indexedMap, size)
 
 -- Configure the game
+
+cellSize : number
 cellSize = 32
+
+gridSize : (Int, Int)
 gridSize = (9, 9)
 -- 
 
-type alias Matrix a = Array (Array a)
-
-genMatrix : Int -> Int -> a -> Matrix a
-genMatrix w h base =
-    fromList <| List.repeat h <| fromList <| List.repeat w base
-
-get i j m =
-    let 
-        row = Array.get i m
-    in 
-        case row of
-            Nothing -> Nothing
-            Just a -> Array.get j a
+type CellState = Revealed | Unrevealed | Flagged | Detonated | RevealedAndFlagged
+type Cell = Cell CellState Bool --bomb or no bomb
 
 
-set i j v m = 
-    let 
-        row = Array.get i m
-        row' = case row of
-            Nothing -> Nothing
-            Just a -> Just (Array.set j v a)
-    in 
-        case row' of
-            Nothing -> m
-            Just newRow -> Array.set i newRow m
-
-map f m =
-    let 
-        (w,h) = size m 
-   
-        row i =
-            Array.map f <| Maybe.withDefault (fromList []) <| Array.get i m
-    in 
-        Array.map row <| fromList [0..(h-1)]
-        
-indexedMap : (Int->Int->Cell->Int)->Matrix Cell->Matrix Int
-indexedMap f m =
-    let 
-        (w,h) = size m 
-   
-        row i =
-            Array.indexedMap (f i) <| Maybe.withDefault (fromList []) <| Array.get i m
-    in 
-        Array.map row <| fromList [0..(h-1)]
-
-
-size m =
-    let 
-        w = Array.length <| Maybe.withDefault (fromList []) <| Array.get 0 m
-        h = Array.length m  
-    in 
-        (w, h)
-
-
+bombSet : Int -> Matrix Cell -> Int -> List (Int, Int)
 bombSet b m t = 
     let 
-        (w, h) = size m
+        (w, h) = Matrix.size m
         iGen = int 0 (w-1)
         jGen = int 0 (h-1)
         bGen = generate (pair iGen jGen)
@@ -84,9 +39,10 @@ bombSet b m t =
     in 
         Set.toList <| addBomb (initialSeed t) Set.empty
         
+bombsAround : Int -> Int -> Matrix Cell -> Int
 bombsAround i j m = 
     let 
-        (w, h) = size m
+        (w, h) = Matrix.size m
 
         contribution i2 j2 =
             let 
@@ -104,11 +60,13 @@ bombsAround i j m =
     in 
         List.foldl row 0 [0..(h-1)]
 
+type alias Model = {matrix : Matrix Cell, infoMatrix: Matrix Int}
 
+init : Model
 init = 
     let 
         (w, h) = gridSize
-        g = genMatrix w h (Cell Unrevealed False)
+        g = Matrix.repeat w h (Cell Unrevealed False)
         bs = bombSet 10 g 42
         addBomb (i,j) m =
             set i j (Cell Unrevealed True) m
@@ -118,18 +76,20 @@ init =
         { matrix = m'
         , infoMatrix = indexedMap ba m' }
 
-type CellState = Revealed | Unrevealed | Flagged | Detonated | RevealedAndFlagged
-type Cell = Cell CellState Bool --bomb or no bomb
-
 
 
 -- View related code 
 
+infoText : Color -> a -> Form
 infoText color = text << (Text.color color) << Text.monospace << (Text.height (cellSize/2)) << Text.fromString << toString 
 
+bombForm : Form
 bombForm = toForm <| image cellSize cellSize "assets/bomb.png"
+
+flagForm : Form
 flagForm = toForm <| image cellSize cellSize "assets/flag.png"
 
+flag : Element
 flag = 
     collage cellSize cellSize 
         [ filled darkGrey <| rect cellSize cellSize
@@ -137,6 +97,7 @@ flag =
         , flagForm
         ]
 
+revealedFlag : Bool -> Element
 revealedFlag b = 
     let 
         over = 
@@ -147,7 +108,7 @@ revealedFlag b =
             , outlined defaultLine <| rect cellSize cellSize
             ] ++ over
 
-
+bomb : Element
 bomb = 
     collage cellSize cellSize 
         [ filled white <| rect cellSize cellSize
@@ -155,20 +116,22 @@ bomb =
         , bombForm
         ]
 
-
+detonated : Element
 detonated = 
     collage cellSize cellSize 
         [ filled red <| rect cellSize cellSize
         , outlined defaultLine <| rect cellSize cellSize
         , bombForm
         ]
-
+        
+unrevealed : Element
 unrevealed = 
     collage cellSize cellSize 
         [ filled darkGrey <| rect cellSize cellSize
         , outlined defaultLine <| rect cellSize cellSize
         ]
 
+revealed : Int -> Element
 revealed noBombs = 
     let 
         c = case noBombs of 
@@ -189,8 +152,7 @@ revealed noBombs =
             ]
 
 
-
-
+cellElement: Int -> Int -> Model -> Maybe Cell -> Element
 cellElement i j m cell =
     let 
         noBombsAround = Maybe.withDefault 0 <| get i j m.infoMatrix
@@ -204,20 +166,22 @@ cellElement i j m cell =
             Cell RevealedAndFlagged b -> revealedFlag b
             _ -> unrevealed
 
+view : Model -> Element
 view m =
     let 
-        (w, h) = size m.matrix
+        (w, h) = Matrix.size m.matrix
         row i = flow right <| List.map (\j -> cellElement i j m <| get i j m.matrix) [0..(w-1)]
     in 
         flow down <| List.map row [0..(h-1)] 
 
 
+update : Action -> Model -> Model
 update action model =
     case action of
         NoOp -> model
         MouseClick (alt, (x, y)) -> 
             let 
-                (w, h) = size model.matrix
+                (w, h) = Matrix.size model.matrix
                 i = y // cellSize
                 j = x // cellSize    
                 cell = get i j model.matrix
@@ -240,7 +204,7 @@ update action model =
                     Just c -> 
                         let 
                             newMatrix = case toNew c of 
-                                (True, newCell) -> map reveal <| set i j newCell model.matrix
+                                (True, newCell) -> Matrix.map reveal <| set i j newCell model.matrix
                                 (False, newCell) -> set i j newCell model.matrix
                         in 
                             { model | matrix = newMatrix}
@@ -248,9 +212,10 @@ update action model =
 
 type Action = NoOp | MouseClick (Bool, (Int, Int))
 
-
+actions : Signal.Mailbox Action
 actions = Signal.mailbox NoOp
 
+mouseClicks : Signal Action
 mouseClicks = 
     Signal.map2 (,) Keyboard.alt Mouse.position
     |> Signal.sampleOn Mouse.clicks 

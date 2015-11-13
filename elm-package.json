@@ -3,7 +3,9 @@
     "summary": "Elm Minesweeper Clone",
     "repository": "https://github.com/pdamoc/elm-mines.git",
     "license": "MIT",
-    "source-directories": [],
+    "source-directories": [
+        "."
+    ],
     "exposed-modules": [],
     "dependencies": {
         "elm-lang/core": "3.0.0 <= v < 4.0.0",
