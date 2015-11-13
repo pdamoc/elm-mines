@@ -22,7 +22,7 @@ numberOfBombs = 10
 -- 
 
 type CellState = Revealed | Unrevealed | Flagged | Detonated | RevealedAndFlagged
-type Cell = Cell CellState Bool --bomb or no bomb
+type Cell = Cell CellState Bool -- bomb or no bomb
 
 
 bombSet : Int -> Matrix Cell -> Int -> List (Int, Int)
