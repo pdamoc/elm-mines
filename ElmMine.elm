@@ -156,10 +156,10 @@ revealed noBombs =
             ]
 
 
-cellElement: Model -> Int -> Int -> Cell -> Element
-cellElement m i j cell =
+cellElement: Matrix Int -> Int -> Int -> Cell -> Element
+cellElement infoMatrix i j cell =
     let 
-        noBombsAround = Maybe.withDefault 0 <| get i j m.infoMatrix
+        noBombsAround = Maybe.withDefault 0 <| get i j infoMatrix
     in
         case cell of 
             Cell Revealed True -> bomb
@@ -174,7 +174,7 @@ view address model =
     let 
         (w, h) = Matrix.size model.matrix
         cells = 
-            Array.toList <| Matrix.indexedMap (cellElement model) model.matrix
+            Array.toList <| Matrix.indexedMap (cellElement model.infoMatrix) model.matrix
 
         rows =  (flow right) << Array.toList
     in 
