@@ -197,8 +197,10 @@ update action model =
                 toNew c = 
                     case (alt, c) of 
                         (True, Cell Unrevealed a) -> (False, Cell Flagged a)
+                        (True, Cell Flagged a) -> (False, Cell Unrevealed a)
                         (False, Cell Unrevealed False) -> (False, Cell Revealed False)
                         (False, Cell Unrevealed True) -> (True, Cell Detonated True)
+                        (False, Cell Flagged True) -> (True, Cell Detonated True)
                         _ -> (False, c)
                 reveal cell = 
                     case cell of 
