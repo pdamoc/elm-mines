@@ -26,6 +26,7 @@ type CellState = Revealed | Unrevealed | Flagged | Detonated | RevealedAndFlagge
 type Cell = Cell CellState Bool -- bomb or no bomb
 
 
+{-| Generated a Set containing the coordinates of the bombs based on b: number of bombs and t an Int for the Random Seed-}
 bombSet : Int -> Matrix Cell -> Int -> List (Int, Int)
 bombSet b m t = 
     let 
@@ -44,6 +45,7 @@ bombSet b m t =
     in 
         Set.toList <| addBomb (initialSeed t) Set.empty
         
+{-| Given a row and, columm and a matrix, calculates the number of bombs around that cell-}        
 bombsAround : Int -> Int -> Matrix Cell -> Int
 bombsAround i j m = 
     let 
@@ -89,7 +91,8 @@ init t =
 
 -- View related code:
 
-infoText : Color -> a -> Form
+{-| given a color, returns a function that will take an Int and output a proportional text in the given color -}
+infoText : Color -> Int -> Form
 infoText color = text << (Text.color color) << Text.monospace << (Text.height (cellSize/2)) << Text.fromString << toString 
 
 bombForm : Form
@@ -163,17 +166,19 @@ revealed noBombs =
 
 cellElement: Matrix Int -> Int -> Int -> Cell -> Element
 cellElement infoMatrix i j cell =
-    let 
-        noBombsAround = Maybe.withDefault 0 <| get i j infoMatrix
-    in
-        case cell of 
-            Cell Revealed True -> bomb
-            Cell Detonated True -> detonated
-            Cell Revealed False -> revealed noBombsAround
-            Cell Flagged _ -> flag
-            Cell RevealedAndFlagged b -> revealedFlag b
-            _ -> unrevealed
+    case cell of 
+        Cell Revealed True -> bomb
+        Cell Detonated True -> detonated
+        Cell Revealed False -> 
+            let 
+                noBombsAround = Maybe.withDefault 0 <| get i j infoMatrix
+            in
+                revealed noBombsAround
+        Cell Flagged _ -> flag
+        Cell RevealedAndFlagged b -> revealedFlag b
+        _ -> unrevealed
 
+{-| traditional, Elm Architecture View -}
 view : Signal.Address Action -> Model -> Element
 view address model =
     let 
@@ -188,18 +193,20 @@ view address model =
 
 -- UPDATE code:
 
-
+{-| traditional Elm Architecture Update-}
 update : Action -> Model -> Model
 update action model =
     case action of
         NoOp -> model
+
         MouseClick (alt, (x, y)) -> 
             let 
                 (w, h) = Matrix.size model.matrix
                 i = y // cellSize
                 j = x // cellSize    
                 cell = get i j model.matrix
-                toNew c = 
+
+                toNew c = -- toggle the cell based on ALT state and previous state
                     case (alt, c) of 
                         (True, Cell Unrevealed a) -> (False, Cell Flagged a)
                         (True, Cell Flagged a) -> (False, Cell Unrevealed a)
@@ -207,6 +214,7 @@ update action model =
                         (False, Cell Unrevealed True) -> (True, Cell Detonated True)
                         (False, Cell Flagged True) -> (True, Cell Detonated True)
                         _ -> (False, c)
+
                 reveal cell = 
                     case cell of 
                         Cell Unrevealed a -> Cell Revealed a
@@ -224,6 +232,7 @@ update action model =
                             if shouldEnd 
                             then { model | matrix = Matrix.map reveal <| set i j newCell model.matrix, isDone = True }
                             else { model | matrix = set i j newCell model.matrix}
+
         SpaceHit t -> 
             if model.isDone then init (floor t) else model
 
@@ -232,12 +241,14 @@ type Action = NoOp | MouseClick (Bool, (Int, Int)) | SpaceHit Time
 actions : Signal.Mailbox Action
 actions = Signal.mailbox NoOp
 
+{-| A signal that combines the mouseclick with the ALT state -}
 mouseClicks : Signal Action
 mouseClicks = 
     Signal.map2 (,) Keyboard.alt Mouse.position
     |> Signal.sampleOn Mouse.clicks 
     |> Signal.map MouseClick
 
+{-| A signal that produces a timestamp everytime SPACE is being pressed -}
 spaceHits : Signal Action
 spaceHits = 
     Keyboard.space
