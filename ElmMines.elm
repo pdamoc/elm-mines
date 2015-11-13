@@ -8,6 +8,7 @@ import Keyboard
 import Text
 import Matrix exposing (Matrix, set, get, repeat, indexedMap, size)
 import Array
+import Time exposing (Time)
 
 -- Configure the game
 
@@ -64,7 +65,10 @@ bombsAround i j m =
     in 
         List.foldl row 0 [0..(h-1)]
 
-type alias Model = {matrix : Matrix Cell, infoMatrix: Matrix Int}
+type alias Model = 
+    { matrix : Matrix Cell
+    , infoMatrix: Matrix Int
+    , isDone : Bool }
 
 init : Int -> Model
 init t = 
@@ -78,7 +82,8 @@ init t =
         ba i j c = bombsAround i j m'
     in 
         { matrix = m'
-        , infoMatrix = indexedMap ba m' }
+        , infoMatrix = indexedMap ba m'
+        , isDone = False }
 
 
 
@@ -214,14 +219,15 @@ update action model =
                     Nothing -> model
                     Just c -> 
                         let 
-                            newMatrix = case toNew c of 
-                                (True, newCell) -> Matrix.map reveal <| set i j newCell model.matrix
-                                (False, newCell) -> set i j newCell model.matrix
+                            (shouldEnd, newCell) = toNew c
                         in 
-                            { model | matrix = newMatrix}
+                            if shouldEnd 
+                            then { model | matrix = Matrix.map reveal <| set i j newCell model.matrix, isDone = True }
+                            else { model | matrix = set i j newCell model.matrix}
+        SpaceHit t -> 
+            if model.isDone then init (floor t) else model
 
-
-type Action = NoOp | MouseClick (Bool, (Int, Int))
+type Action = NoOp | MouseClick (Bool, (Int, Int)) | SpaceHit Time
 
 actions : Signal.Mailbox Action
 actions = Signal.mailbox NoOp
@@ -232,8 +238,15 @@ mouseClicks =
     |> Signal.sampleOn Mouse.clicks 
     |> Signal.map MouseClick
 
+spaceHits : Signal Action
+spaceHits = 
+    Keyboard.space
+    |> Signal.filter identity True
+    |> Time.timestamp
+    |> Signal.map (\(t, a) -> SpaceHit t)
+
 main : Signal Element
 main = 
-    Signal.merge actions.signal mouseClicks
+    Signal.mergeMany [actions.signal, mouseClicks, spaceHits]
     |> Signal.foldp update (init 42)   
     |> Signal.map (view actions.address)
