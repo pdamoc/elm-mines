@@ -15,6 +15,9 @@ cellSize = 32
 
 gridSize : (Int, Int)
 gridSize = (9, 9)
+
+numberOfBombs : Int 
+numberOfBombs = 10 
 -- 
 
 type CellState = Revealed | Unrevealed | Flagged | Detonated | RevealedAndFlagged
@@ -62,12 +65,12 @@ bombsAround i j m =
 
 type alias Model = {matrix : Matrix Cell, infoMatrix: Matrix Int}
 
-init : Model
-init = 
+init : Int -> Model
+init t = 
     let 
         (w, h) = gridSize
         g = Matrix.repeat w h (Cell Unrevealed False)
-        bs = bombSet 10 g 42
+        bs = bombSet numberOfBombs g t
         addBomb (i,j) m =
             set i j (Cell Unrevealed True) m
         m' = List.foldl addBomb g bs
@@ -123,7 +126,7 @@ detonated =
         , outlined defaultLine <| rect cellSize cellSize
         , bombForm
         ]
-        
+
 unrevealed : Element
 unrevealed = 
     collage cellSize cellSize 
@@ -224,5 +227,5 @@ mouseClicks =
 main : Signal Element
 main = 
     Signal.merge actions.signal mouseClicks
-    |> Signal.foldp update init  
+    |> Signal.foldp update (init 42)   
     |> Signal.map view
