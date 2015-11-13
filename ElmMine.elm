@@ -7,6 +7,7 @@ import Mouse
 import Keyboard
 import Text
 import Matrix exposing (Matrix, set, get, repeat, indexedMap, size)
+import Array
 
 -- Configure the game
 
@@ -81,7 +82,7 @@ init t =
 
 
 
--- View related code 
+-- View related code:
 
 infoText : Color -> a -> Form
 infoText color = text << (Text.color color) << Text.monospace << (Text.height (cellSize/2)) << Text.fromString << toString 
@@ -155,13 +156,12 @@ revealed noBombs =
             ]
 
 
-cellElement: Int -> Int -> Model -> Maybe Cell -> Element
-cellElement i j m cell =
+cellElement: Model -> Int -> Int -> Cell -> Element
+cellElement m i j cell =
     let 
         noBombsAround = Maybe.withDefault 0 <| get i j m.infoMatrix
-        cell' = Maybe.withDefault (Cell Revealed False) cell
     in
-        case cell' of 
+        case cell of 
             Cell Revealed True -> bomb
             Cell Detonated True -> detonated
             Cell Revealed False -> revealed noBombsAround
@@ -169,13 +169,19 @@ cellElement i j m cell =
             Cell RevealedAndFlagged b -> revealedFlag b
             _ -> unrevealed
 
-view : Model -> Element
-view m =
+view : Signal.Address Action -> Model -> Element
+view address model =
     let 
-        (w, h) = Matrix.size m.matrix
-        row i = flow right <| List.map (\j -> cellElement i j m <| get i j m.matrix) [0..(w-1)]
+        (w, h) = Matrix.size model.matrix
+        cells = 
+            Array.toList <| Matrix.indexedMap (cellElement model) model.matrix
+
+        rows =  (flow right) << Array.toList
     in 
-        flow down <| List.map row [0..(h-1)] 
+        flow down <| List.map rows cells 
+
+
+-- UPDATE code:
 
 
 update : Action -> Model -> Model
@@ -228,4 +234,4 @@ main : Signal Element
 main = 
     Signal.merge actions.signal mouseClicks
     |> Signal.foldp update (init 42)   
-    |> Signal.map view
+    |> Signal.map (view actions.address)
